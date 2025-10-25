@@ -6,7 +6,7 @@ Naturally, every manufacturer has a different remote. On some hifi systems, only
 
 The aim of hifi-link is to enable the implementation of many different protocols and to provide an environment along with configuration and user interface.
 
-Nowadays, the remotes we all have in our pockets are our smartphones. What if we could bring all remotes into a singular system remote, fully configurable and with advanced functionalities right into our pocket?
+Nowadays, the remotes we all have universally available are our phones. What if we could bring all old hifi remotes into a singular system remote, fully configurable and with advanced functionalities right in our pocket?
 
 That is what **hifi-link** is all about.
 
