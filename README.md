@@ -1,4 +1,4 @@
-# hifi-link 📀⚡️📻
+# hifi-link 💿⚡️📀
 
 Since the 1980s, many amplifiers, receivers, tape decks, cd players and even some turntables come with remote controls. This is great for controlling the equipment from a distance. However, there are some unsatisfying limitations: range, obstacles blocking the signal and more.
 
