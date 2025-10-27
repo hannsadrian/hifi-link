@@ -83,14 +83,14 @@ def serve(port: int, router, api_key: str | None, context):
                     conn.close()
                     continue
 
-                if method == "OPTIONS":
-                    send_preflight(conn)
-                    conn.close()
-                    continue
-
                 params = _parse_query(query)
                 if not _auth_ok(headers, params, api_key):
                     json_response(conn, 403, {"error": "Invalid API Key"})
+                    conn.close()
+                    continue
+
+                if method == "OPTIONS":
+                    send_preflight(conn)
                     conn.close()
                     continue
 

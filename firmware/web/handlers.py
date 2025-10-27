@@ -135,9 +135,33 @@ def device_delete_handler(ctx, req):
 def device_send_handler(ctx, req):
     name = req.params.get("name") or req.params.get("device") or (req.json or {}).get("name")
     command = req.params.get("command") or (req.json or {}).get("command")
+    reps_raw = req.params.get("repetitions") or (req.json or {}).get("repetitions")
     if not name or not command:
         return 400, {"error": "Missing 'name' or 'command'"}
-    return dispatch_send(ctx, name, command)
+
+    # Parse optional repetitions override
+    options = {}
+    if reps_raw is not None:
+        try:
+            options["repetitions"] = max(1, int(reps_raw))
+        except Exception:
+            return 400, {"error": "Invalid 'repetitions' value"}
+
+    # Allow comma-separated multiple commands in 'command' parameter
+    if "," in str(command):
+        commands = [c.strip() for c in str(command).split(",") if c.strip()]
+        results = []
+        overall_ok = True
+        for cmd in commands:
+            status, payload = dispatch_send(ctx, name, cmd, options)
+            results.append({"command": cmd, "status": status, "payload": payload})
+            if status != 200:
+                overall_ok = False
+        # Always return 200 with per-command statuses to avoid partial failures blocking response
+        return 200, {"status": "multi", "device": name, "results": results}
+
+    # Single command behavior (preserve original return semantics)
+    return dispatch_send(ctx, name, command, options)
 
 
 def device_setup_handler(ctx, req):
@@ -146,3 +170,34 @@ def device_setup_handler(ctx, req):
     if not name or not command:
         return 400, {"error": "Missing 'name' or 'command'"}
     return dispatch_setup(ctx, name, command)
+
+
+def device_send_ws_handler(ctx, ws):
+    """Handles device/send commands over WebSocket."""
+    while ws.open:
+        msg = ws.recv()
+        if not msg:
+            continue
+
+        try:
+            data = json.loads(msg)
+            device = data.get("device")
+            command = data.get("command")
+            count = int(data.get("count", 1))
+
+            if not device or not command:
+                ws.send(json.dumps({"status": "error", "message": "Missing 'device' or 'command'"}))
+                continue
+
+            led = _ensure_led(ctx)
+            if led:
+                led.fast_blink()
+
+            result = dispatch_send(ctx, device, command, count)
+
+            ws.send(json.dumps(result))
+
+        except (ValueError, TypeError):
+            ws.send(json.dumps({"status": "error", "message": "Invalid JSON"}))
+        except Exception as e:
+            ws.send(json.dumps({"status": "error", "message": str(e)}))

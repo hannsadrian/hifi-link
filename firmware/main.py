@@ -46,6 +46,7 @@ def main():
         "codes_filename": cfg["storage"]["codes_filename"],
         "devices_filename": cfg["storage"]["devices_filename"],
         "toggle_bit": 0,
+        "toggles": {},
     }
 
     router = {

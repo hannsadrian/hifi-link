@@ -18,7 +18,7 @@ def _get_player_for_freq(ctx, tx_freq):
     return player
 
 
-def send_ir(ctx, device_name: str, device_entry: dict, command: str):
+def send_ir(ctx, device_name: str, device_entry: dict, command: str, options=None):
     ir_cfg = device_entry.get("ir") or {}
     tx_freq = ir_cfg.get("tx_freq") or ctx.get("config", {}).get("ir", {}).get("tx_freq")
     codes = (ir_cfg.get("codes") or {})
@@ -29,7 +29,21 @@ def send_ir(ctx, device_name: str, device_entry: dict, command: str):
     if not timings:
         return 404, {"error": f"No timings for command '{command}', toggle {toggle_bit}"}
 
-    timings_to_send = timings + [27830] + timings
+    # repetitions override
+    reps = 2  # preserve previous behavior of sending twice by default
+    try:
+        if options and options.get("repetitions") is not None:
+            reps = max(1, int(options.get("repetitions")))
+    except Exception:
+        reps = 2
+
+    # Build concatenated timings for the requested repetitions.
+    # Each repetition uses the same toggle variant within this call.
+    timings_to_send = []
+    for i in range(reps):
+        timings_to_send.extend(timings)
+        if i != reps - 1:
+            timings_to_send.append(27830)  # Inter-frame gap
 
     led = _led(ctx)
     try:
@@ -43,7 +57,7 @@ def send_ir(ctx, device_name: str, device_entry: dict, command: str):
             led.off()
 
     ctx["toggle_bit"] = 1 - toggle_bit
-    return 200, {"status": "success", "device": device_name, "command": command, "toggle_next": ctx["toggle_bit"]}
+    return 200, {"status": "success", "device": device_name, "command": command, "repetitions": reps, "toggle_next": ctx["toggle_bit"]}
 
 
 def learn_ir(ctx, device_name: str, device_entry: dict, command: str):

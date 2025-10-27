@@ -26,14 +26,14 @@ def cors_headers():
 
 
 def send_preflight(conn):
-    conn.send("HTTP/1.0 204 No Content\r\n")
+    conn.send("HTTP/1.1 204 No Content\r\n")
     conn.send(cors_headers())
     conn.send("\r\n")
 
 
 def json_response(conn, code: int, payload):
     body = json.dumps(payload)
-    conn.send("HTTP/1.0 %s\r\n" % _status_line(code))
+    conn.send("HTTP/1.1 %s\r\n" % _status_line(code))
     conn.send("Content-Type: application/json\r\n")
     conn.send(cors_headers())
     conn.send("Content-Length: %d\r\n\r\n" % len(body))

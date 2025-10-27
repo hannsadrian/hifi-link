@@ -137,7 +137,7 @@ class IR:
 class Player(IR):
 
     def __init__(self, pin, freq=38000, verbose=False, asize=68):  # NEC specifies 38KHz
-        super().__init__(pin, freq, asize, 33, verbose)  # Measured duty ratio 33%
+        super().__init__(pin, freq, asize, 50, verbose)  # Measured duty ratio 33%
 
     def play(self, lst):
         for x, t in enumerate(lst):

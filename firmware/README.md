@@ -21,6 +21,8 @@ This firmware targets the Raspberry Pi Pico W (MicroPython) and provides a small
 - `web/server.py` — tiny HTTP server + router.
 - `web/handlers.py` — request handlers for API endpoints.
 - `protocols/` — protocol dispatch and helpers (e.g., IR) used by `/device/*` endpoints.
+  - `protocols/ir.py` — raw learned IR send/learn support.
+  - `protocols/saa3004.py` — SAA3004 (RC5) encoder using 6-bit commands.
 
 ## API
 
@@ -31,6 +33,8 @@ All endpoints require an API key, supplied via `X-API-Key` header or `apikey` qu
 - `GET /config` — current config (merged view).
 - `PUT /config` — update config overrides. Body: JSON object of keys to override.
 - `GET /device/send?name=<device>&command=<cmd>` — send a command via the device’s protocol.
+  - Multiple commands: comma-separate values in `command` (e.g., `command=play,stop`).
+  - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send.
 - `POST /device/setup?name=<device>&command=<cmd>` — teach/setup a command for the device’s protocol.
 - `GET /devices` — list all devices (from `devices.json`).
 - `GET /device?name=<device>` — get a single device.
@@ -101,4 +105,83 @@ Devices are stored in `devices.json`. Suggested schema:
 }
 ```
 
-If a device has `protocol` other than `IR`, `/device/send` will return 501 until that protocol is implemented (placeholders for XS8/SL16).
+If a device has `protocol` other than `IR`, `/device/send` will return 501 unless that protocol is implemented. Currently supported: `IR`, `SAA3004` (RC5), `KENWOOD_XS8`.
+
+### SAA3004 (RC5) usage
+
+Create a device using the SAA3004 encoder (default address 6 for audio):
+
+```
+PUT /device
+{
+  "name": "MyAmp",
+  "protocol": "SAA3004",
+  "saa3004": {
+    "address": 6,
+    "map": {
+      "on": "000000",
+      "volume+": 16,
+      "volume-": "0x11"
+    }
+  },
+  "ir": { "tx_freq": 36000 }
+}
+```
+
+Then send by name or code:
+
+```
+GET /device/send?name=MyAmp&command=volume+
+GET /device/send?name=MyAmp&command=0b010000
+GET /device/send?name=MyAmp&command=16
+```
+
+Note: SAA3004 is encoded, not learned. `/device/setup` returns 405 for this protocol; configure mappings via `PUT /device`.
+
+### Kenwood XS8 usage
+
+Wire the two control lines to GPIO pins (CTRL and SDAT). Create a device like:
+
+```
+PUT /device
+{
+  "name": "KenwoodDeck",
+  "protocol": "KENWOOD_XS8",
+  "kenwood_xs8": {
+    "ctrl_pin": 14,
+    "sdat_pin": 15,
+    "map": {
+      "play": 121,
+      "stop": 68,
+      "pause": 76,
+      "next_track": 66,
+      "prev_track": 74
+    }
+  }
+}
+```
+
+Then send by name or raw code:
+
+```
+GET /device/send?name=KenwoodDeck&command=play
+GET /device/send?name=KenwoodDeck&command=68
+GET /device/send?name=KenwoodDeck&command=0x44
+```
+
+Timing constants are tuned for MicroPython busy-wait and can be overridden per device under `kenwood_xs8.timing` in microseconds:
+
+```
+"kenwood_xs8": {"ctrl_pin": 14, "sdat_pin": 15,
+  "timing": {
+    "pre_start_us": 5000,
+    "start_high_us": 7000,
+    "bit0_low_us": 5000,
+    "bit1_low_us": 9800,
+    "frame_high_us": 5000,
+    "post_ctrl_low_us": 3000
+  }
+}
+```
+
+Note: Kenwood XS8 is encoded, not learned. `/device/setup` returns 405; configure via `PUT /device`.
