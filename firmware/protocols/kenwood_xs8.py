@@ -79,7 +79,7 @@ def _resolve_pins(dev):
     """Read ctrl/sdat pins from device entry.
 
     Expects dev["kenwood_xs8"] to contain:
-      { "ctrl_pin": <int>, "sdat_pin": <int>, "map": {..}, "timing": {..(optional)..} }
+      { "ctrl_pin": <int>, "sdat_pin": <int>, "commands": {..}, "timing": {..(optional)..} }
     """
     cfg = dev.get("kenwood_xs8") or {}
     ctrl_pin = cfg.get("ctrl_pin")
@@ -97,7 +97,7 @@ def send_kenwood_xs8(ctx, device_name, dev, command, options=None):
         "kenwood_xs8": {
           "ctrl_pin": 14,
           "sdat_pin": 15,
-          "map": { "play": 121, "stop": 68 }
+          "commands": { "play": 121, "stop": 68 }
         }
       }
     """
@@ -105,7 +105,7 @@ def send_kenwood_xs8(ctx, device_name, dev, command, options=None):
     if ctrl_pin_num is None or sdat_pin_num is None:
         return 400, {"error": "Missing kenwood_xs8.ctrl_pin or kenwood_xs8.sdat_pin in device config"}
 
-    mapping = cfg.get("map") or DEFAULT_COMMANDS
+    mapping = cfg.get("commands") or DEFAULT_COMMANDS
     code = _parse_command_code(command, mapping)
     if code is None:
         return 404, {"error": f"Unknown command '{command}' for Kenwood XS8"}

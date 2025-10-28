@@ -15,6 +15,7 @@ DEFAULT_CONFIG = {
     "storage": {
         "codes_filename": "known_codes.json",
         "devices_filename": "devices.json",
+        "ui_config_filename": "ui_config.json",
     },
     "debug": False,
 }

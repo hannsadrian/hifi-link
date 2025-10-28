@@ -31,7 +31,7 @@ def setup_command(ctx, name: str, command: str):
     if not dev:
         # Auto-create IR device with default frequency if missing
         default_freq = ctx.get("config", {}).get("ir", {}).get("tx_freq")
-        dev = {"protocol": "IR", "ir": {"tx_freq": default_freq, "codes": {}}}
+        dev = {"protocol": "IR", "ir": {"tx_freq": default_freq, "commands": {}}}
         devices[name] = dev
 
     protocol = (dev.get("protocol") or "IR").upper()

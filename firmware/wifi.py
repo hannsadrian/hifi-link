@@ -17,6 +17,7 @@ def connect(wlan, ssid: str, password: str, status_led=None, timeout_s: int = 15
     max_wait = timeout_s
     while max_wait > 0:
         st = wlan.status()
+        print("Wi-Fi status:", st)
         if st < 0 or st >= 3:
             break
         max_wait -= 1

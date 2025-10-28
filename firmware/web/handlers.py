@@ -55,6 +55,32 @@ def config_put_handler(ctx, req):
     return 200, {"status": "updated", "config": cfg}
 
 
+# ----- UI Config (arbitrary JSON) -----
+
+def _ui_config_filename(ctx):
+    return ctx.get("ui_config_filename") or "ui_config.json"
+
+
+def ui_config_get_handler(ctx, req):
+    """Return arbitrary JSON previously stored for the UI.
+
+    If the file doesn't exist or is invalid, returns an empty object.
+    """
+    data = read_json(_ui_config_filename(ctx), {})
+    return 200, data
+
+
+def ui_config_put_handler(ctx, req):
+    """Store arbitrary JSON for the UI.
+
+    Accepts any valid JSON type (object, array, string, number, boolean, null).
+    """
+    if req.json is None:
+        return 400, {"error": "Expected JSON body with Content-Type: application/json"}
+    write_json_atomic(_ui_config_filename(ctx), req.json)
+    return 200, req.json
+
+
 # ----- Devices CRUD -----
 
 def _load_devices(ctx):

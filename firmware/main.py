@@ -13,6 +13,8 @@ from web.handlers import (
     info_handler,
     config_get_handler,
     config_put_handler,
+    ui_config_get_handler,
+    ui_config_put_handler,
     device_send_handler,
     device_setup_handler,
     devices_list_handler,
@@ -32,6 +34,7 @@ def main():
     player = Player(ir_tx_pin, freq=cfg["ir"]["tx_freq"])  # 36kHz default
 
     # Wi-Fi
+    network.country('DE')
     wlan = network.WLAN(network.STA_IF)
     ip_address = wifi_connect(wlan, secrets.SSID, secrets.PASSWORD, status_led=led)
     print("Connected! Pico IP:", ip_address)
@@ -41,10 +44,12 @@ def main():
         "config": cfg,
         "led": led,
         "player": player,
+        "player_freq": int(cfg["ir"]["tx_freq"]) if cfg.get("ir") and cfg["ir"].get("tx_freq") is not None else None,
         "ir_tx_pin": ir_tx_pin,
         "wlan": wlan,
         "codes_filename": cfg["storage"]["codes_filename"],
         "devices_filename": cfg["storage"]["devices_filename"],
+        "ui_config_filename": cfg["storage"].get("ui_config_filename", "ui_config.json"),
         "toggle_bit": 0,
         "toggles": {},
     }
@@ -54,6 +59,9 @@ def main():
         ("GET", "/info"): info_handler,
         ("GET", "/config"): config_get_handler,
         ("PUT", "/config"): config_put_handler,
+    # UI config (arbitrary JSON)
+    ("GET", "/ui/config"): ui_config_get_handler,
+    ("PUT", "/ui/config"): ui_config_put_handler,
         # Unified device operations (protocol-dispatched)
         ("GET", "/device/send"): device_send_handler,
         ("POST", "/device/setup"): device_setup_handler,

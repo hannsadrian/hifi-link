@@ -8,6 +8,7 @@ This firmware targets the Raspberry Pi Pico W (MicroPython) and provides a small
 - Secrets (Wi‑Fi SSID/PASSWORD and API key) remain in `secrets.py`.
 - Minimal HTTP server with routing, CORS, and JSON responses.
 - Endpoints for health/info, configuration, and device send/setup (protocol-dispatched).
+ - Simple UI configuration store (`/ui/config`) that accepts arbitrary JSON.
 - Robust JSON storage with atomic writes to reduce flash corruption.
 - Devices registry with CRUD to manage per-device protocol and IR codes.
 
@@ -32,6 +33,8 @@ All endpoints require an API key, supplied via `X-API-Key` header or `apikey` qu
 - `GET /info` — firmware version and current (merged) config.
 - `GET /config` — current config (merged view).
 - `PUT /config` — update config overrides. Body: JSON object of keys to override.
+ - `GET /ui/config` — return arbitrary JSON stored for the UI (from `ui_config.json`).
+ - `PUT /ui/config` — store arbitrary JSON for the UI (any JSON type). Body: any JSON value.
 - `GET /device/send?name=<device>&command=<cmd>` — send a command via the device’s protocol.
   - Multiple commands: comma-separate values in `command` (e.g., `command=play,stop`).
   - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send.
@@ -53,7 +56,7 @@ Defaults are inside `config.py`:
   "pins": {"ir_tx": 17, "ir_rx": 16, "status_led": "LED"},
   "ir": {"tx_freq": 36000},
   "web": {"port": 80},
-  "storage": {"codes_filename": "known_codes.json", "devices_filename": "devices.json"},
+  "storage": {"codes_filename": "known_codes.json", "devices_filename": "devices.json", "ui_config_filename": "ui_config.json"},
   "debug": false
 }
 ```
@@ -85,6 +88,12 @@ API_KEY = "..."
 - IR learn waits for two presses of the same button to capture both toggle variants.
 - IR send automatically toggles between the stored variants per press.
 - Storage uses atomic writes (`*.tmp` then rename) to protect against power loss.
+
+### IR transmitter sharing
+
+- All IR protocols now share a single IR Player instance stored in `ctx["player"]`.
+- When a protocol needs a different carrier frequency, the Player is re-created in-place and saved back to the context, so subsequent sends use the updated configuration.
+- A shared transmit lock serializes sends across protocols to prevent overlapping transmissions on the same GPIO.
 
 ### Devices schema
 
@@ -118,7 +127,7 @@ PUT /device
   "protocol": "SAA3004",
   "saa3004": {
     "address": 6,
-    "map": {
+    "commands": {
       "on": "000000",
       "volume+": 16,
       "volume-": "0x11"
@@ -136,7 +145,7 @@ GET /device/send?name=MyAmp&command=0b010000
 GET /device/send?name=MyAmp&command=16
 ```
 
-Note: SAA3004 is encoded, not learned. `/device/setup` returns 405 for this protocol; configure mappings via `PUT /device`.
+Note: SAA3004 is encoded, not learned. `/device/setup` returns 405 for this protocol; configure commands via `PUT /device`.
 
 ### Kenwood XS8 usage
 
@@ -150,7 +159,7 @@ PUT /device
   "kenwood_xs8": {
     "ctrl_pin": 14,
     "sdat_pin": 15,
-    "map": {
+    "commands": {
       "play": 121,
       "stop": 68,
       "pause": 76,

@@ -1,6 +1,5 @@
 import time
-from machine import Pin
-from ir.ir_tx import Player 
+from protocols.ir import _get_player_for_freq, _get_ir_lock
 
 # --- CONFIGURATION BASED ON SAA3004 DATA SHEET ---
 
@@ -90,7 +89,7 @@ def _get_freq(ctx, dev):
 def send_saa3004(ctx, device_name, dev, command, options=None):
     # Resolve settings
     proto_cfg = dev.get("saa3004") or {}
-    mapping = proto_cfg.get("map") or {}
+    mapping = proto_cfg.get("commands") or {}
     code = _parse_code(command, mapping)
     if code is None:
         return 400, {"error": "Invalid or unknown command; provide 6-bit binary, decimal/hex, or use map."}
@@ -132,12 +131,22 @@ def send_saa3004(ctx, device_name, dev, command, options=None):
         timings.append(int(TW-int(sum(timings))))
         timings_combined.extend(timings)
 
-    pin = ctx.get("ir_tx_pin")
     freq = _get_freq(ctx, dev)
-    ir_player = Player(pin=Pin(pin, Pin.OUT, value=0), freq=freq, asize=len(timings_combined))
+    player = _get_player_for_freq(ctx, freq, asize=138)
 
-    # Send via Player at SAA3004 frequency
-    ir_player.play(timings_combined)
+    # Serialize with shared lock to avoid overlap with other protocols
+    lock = _get_ir_lock(ctx)
+    if lock:
+        lock.acquire()
+    try:
+        # Send via shared Player at required frequency
+        player.play(timings_combined)
+    finally:
+        if lock:
+            try:
+                lock.release()
+            except Exception:
+                pass
 
     toggle[device_name] = not toggle_t0
     return 200, {
@@ -147,4 +156,4 @@ def send_saa3004(ctx, device_name, dev, command, options=None):
 
 def setup_saa3004(ctx, device_name, dev, command):
     # SAA3004 is encoded, not learned; support only mapping updates via device PUT.
-    return 405, {"error": "SAA3004 is encoded; use PUT /device to configure 'saa3004.map' or send by 6-bit code."}
+    return 405, {"error": "SAA3004 is encoded; use PUT /device to configure 'saa3004.commands' or send by 6-bit code."}
