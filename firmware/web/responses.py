@@ -6,6 +6,7 @@ def _status_line(code: int) -> str:
         200: "200 OK",
         201: "201 Created",
         204: "204 No Content",
+        413: "413 Payload Too Large",
         400: "400 Bad Request",
         401: "401 Unauthorized",
         403: "403 Forbidden",
@@ -20,7 +21,7 @@ def _status_line(code: int) -> str:
 def cors_headers():
     return (
         "Access-Control-Allow-Origin: *\r\n"
-        "Access-Control-Allow-Methods: GET, POST, PUT, OPTIONS\r\n"
+        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n"
         "Access-Control-Allow-Headers: Content-Type, X-API-Key\r\n"
     )
 

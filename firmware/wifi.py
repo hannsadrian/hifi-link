@@ -13,6 +13,14 @@ def connect(wlan, ssid: str, password: str, status_led=None, timeout_s: int = 15
     except Exception:
         pass
 
+    wlan.scan()  # Trigger scan to populate known networks
+    time.sleep(1)
+    print("Scanned for Wi-Fi networks")
+    print("Available networks:")
+    networks = wlan.scan()
+    for net in networks:
+        print(" -", net[0].decode())
+    time.sleep(1)
     wlan.connect(ssid, password)
     max_wait = timeout_s
     while max_wait > 0:

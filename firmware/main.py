@@ -22,6 +22,11 @@ from web.handlers import (
     device_put_handler,
     device_delete_handler,
 )
+try:
+    import _thread
+except Exception:
+    _thread = None
+import time
 
 
 def main():
@@ -52,7 +57,37 @@ def main():
         "ui_config_filename": cfg["storage"].get("ui_config_filename", "ui_config.json"),
         "toggle_bit": 0,
         "toggles": {},
+        # Async send queue (optional)
+        "send_queue": [],
+        "send_queue_max": 64,
     }
+
+    # Start background worker to process enqueued sends if threading is available
+    def _send_worker(ctx):
+        from protocols.dispatch import send_command as _send
+        while True:
+            try:
+                item = None
+                q = ctx.get("send_queue")
+                if q:
+                    try:
+                        item = q.pop(0)
+                    except Exception:
+                        item = None
+                if item is None:
+                    time.sleep(0.01)
+                    continue
+                name, command, options = item
+                _send(ctx, name, command, options)
+            except Exception:
+                # Don't crash worker on errors
+                time.sleep(0.05)
+
+    if _thread is not None:
+        try:
+            _thread.start_new_thread(_send_worker, (context,))
+        except Exception:
+            pass
 
     router = {
         ("GET", "/health"): health_handler,

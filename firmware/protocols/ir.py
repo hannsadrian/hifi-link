@@ -86,14 +86,26 @@ def send_ir(ctx, device_name: str, device_entry: dict, command: str, options=Non
     try:
         if led:
             led.on()
-        # Serialize send if lock exists
+        # Serialize configuration/send initiation
         if lock:
             lock.acquire()
         player = _get_player_for_freq(ctx, tx_freq, asize=136)
-        #print("[IR] sending '%s' for device '%s' at %s Hz (toggle %s)" % (command, device_name, tx_freq, toggle_bit))
+        # Wait for any prior hardware transmission to finish to avoid stomping SM
+        try:
+            while player.busy():
+                time.sleep_ms(1)
+        except Exception:
+            pass
+        ctx["ir_busy"] = True
+        # Initiate transmission (non-blocking), then wait for hardware to finish
         player.play(timings_to_send)
-        #print("[IR] sent")
+        try:
+            while player.busy():
+                time.sleep_ms(1)
+        except Exception:
+            pass
     finally:
+        ctx["ir_busy"] = False
         if lock:
             try:
                 lock.release()

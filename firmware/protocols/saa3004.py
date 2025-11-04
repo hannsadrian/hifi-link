@@ -139,9 +139,23 @@ def send_saa3004(ctx, device_name, dev, command, options=None):
     if lock:
         lock.acquire()
     try:
+        # Ensure any prior hardware transmission has finished to avoid PIO FIFO/SM contention
+        try:
+            while player.busy():
+                time.sleep_ms(1)
+        except Exception:
+            pass
         # Send via shared Player at required frequency
+        ctx["ir_busy"] = True
         player.play(timings_combined)
+        # Wait until transmission complete before returning so queue serializes correctly
+        try:
+            while player.busy():
+                time.sleep_ms(1)
+        except Exception:
+            pass
     finally:
+        ctx["ir_busy"] = False
         if lock:
             try:
                 lock.release()

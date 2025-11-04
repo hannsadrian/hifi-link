@@ -37,7 +37,9 @@ All endpoints require an API key, supplied via `X-API-Key` header or `apikey` qu
  - `PUT /ui/config` — store arbitrary JSON for the UI (any JSON type). Body: any JSON value.
 - `GET /device/send?name=<device>&command=<cmd>` — send a command via the device’s protocol.
   - Multiple commands: comma-separate values in `command` (e.g., `command=play,stop`).
-  - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send.
+  - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send (same toggle variant; reliability).
+  - Batch repeated presses: include `count=<n>` to send the same command `n` times (simulates multiple button presses; toggles between variants each press).
+  - Fast async enqueue: include `fast=1` (or `async=1`) to enqueue sends to a background worker and return immediately with `202`.
 - `POST /device/setup?name=<device>&command=<cmd>` — teach/setup a command for the device’s protocol.
 - `GET /devices` — list all devices (from `devices.json`).
 - `GET /device?name=<device>` — get a single device.
@@ -88,6 +90,8 @@ API_KEY = "..."
 - IR learn waits for two presses of the same button to capture both toggle variants.
 - IR send automatically toggles between the stored variants per press.
 - Storage uses atomic writes (`*.tmp` then rename) to protect against power loss.
+- Performance: `/device/send` avoids flash reads by caching `devices.json` in memory and supports batching via `count` to reduce HTTP overhead.
+  - For high-frequency control (e.g., volume), prefer `fast=1&count=<n>` to enqueue multiple presses and minimize round-trips.
 
 ### IR transmitter sharing
 
