@@ -1,16 +1,8 @@
 from storage import read_json, write_json_atomic
 
 
-def _get_devices_cache(ctx):
-    devices = ctx.get("devices_cache")
-    if devices is None:
-        devices = read_json(ctx.get("devices_filename"), {}) or {}
-        ctx["devices_cache"] = devices
-    return devices
-
-
 def _get_device(ctx, name):
-    devices = _get_devices_cache(ctx)
+    devices = read_json(ctx.get("devices_filename"), {}) or {}
     return devices, devices.get(name)
 
 

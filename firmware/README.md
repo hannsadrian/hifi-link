@@ -37,14 +37,36 @@ All endpoints require an API key, supplied via `X-API-Key` header or `apikey` qu
  - `PUT /ui/config` — store arbitrary JSON for the UI (any JSON type). Body: any JSON value.
 - `GET /device/send?name=<device>&command=<cmd>` — send a command via the device’s protocol.
   - Multiple commands: comma-separate values in `command` (e.g., `command=play,stop`).
-  - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send (same toggle variant; reliability).
-  - Batch repeated presses: include `count=<n>` to send the same command `n` times (simulates multiple button presses; toggles between variants each press).
-  - Fast async enqueue: include `fast=1` (or `async=1`) to enqueue sends to a background worker and return immediately with `202`.
+  - Override repetitions: include `repetitions=<n>` to repeat the same frame `n` times within a single send.
 - `POST /device/setup?name=<device>&command=<cmd>` — teach/setup a command for the device’s protocol.
 - `GET /devices` — list all devices (from `devices.json`).
 - `GET /device?name=<device>` — get a single device.
 - `PUT /device` — create/update a device. Body JSON must include `name` and optional fields like `protocol`, `ir`.
 - `DELETE /device?name=<device>` — delete a device.
+ 
+### Timers
+
+- `GET /timers` — list active timers (persisted on flash in `timers.json`). Returns a list of timer objects.
+- `POST /timers` — create a new timer. Body JSON:
+  ```
+  {
+    "type": "generic",           // arbitrary label/type
+    "label": "Morning routine",  // human label
+    "delay_minutes": 5,           // delay before firing
+    "actions": [
+      { "device": "MyAmp", "action": "on" },
+      { "device": "MyAmp", "action": "volume+", "repetitions": 3, "delay_ms": 800 }
+    ]
+  }
+  ```
+  - Each action supports optional `repetitions` (sent within a single frame burst) and optional `delay_ms` (wait before the next action; default 1000ms).
+  - Responds with 202.
+- `POST /timers/test` — same body as above, but does not persist; executes immediately (all delays are ignored). Responds with 200.
+- `DELETE /timer?id=<timer_id>` — delete a persisted timer by ID. Responds with 200 or 404.
+
+Notes:
+- Timers are evaluated in the web server loop with a lightweight periodic tick (no threads/uasyncio required).
+- Time base uses `time.time()` if available; otherwise falls back to monotonic ticks.
  
 
 Responses are JSON; CORS is enabled for development convenience.
@@ -90,8 +112,6 @@ API_KEY = "..."
 - IR learn waits for two presses of the same button to capture both toggle variants.
 - IR send automatically toggles between the stored variants per press.
 - Storage uses atomic writes (`*.tmp` then rename) to protect against power loss.
-- Performance: `/device/send` avoids flash reads by caching `devices.json` in memory and supports batching via `count` to reduce HTTP overhead.
-  - For high-frequency control (e.g., volume), prefer `fast=1&count=<n>` to enqueue multiple presses and minimize round-trips.
 
 ### IR transmitter sharing
 

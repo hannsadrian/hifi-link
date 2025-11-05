@@ -12,13 +12,23 @@ export default function TabLayout() {
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
       }}>
+      {/* Remote */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Remote",
-          tabBarIcon: () => ({ sfSymbol: "fan" }),
+          tabBarIcon: () => ({ sfSymbol: "wave.3.up" }),
         }}
       />
+      {/* Timers */}
+      <Tabs.Screen
+        name="timers"
+        options={{
+          title: "Timers",
+          tabBarIcon: () => ({ sfSymbol: "alarm" }),
+        }}
+      />
+      {/* Settings */}
       <Tabs.Screen
         name="settings"
         options={{
@@ -26,6 +36,7 @@ export default function TabLayout() {
           tabBarIcon: () => ({ sfSymbol: "gear" }),
         }}
       />
+      
     </Tabs>
   );
 }

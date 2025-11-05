@@ -89,15 +89,7 @@ class RP2_RMT:
 
     # Arg is an array of times in μs terminated by 0.
     def send(self, ar, reps=1, check=True):
-        # Ensure SM is stopped and FIFO is cleared to avoid blocking on put
-        try:
-            self.sm.active(0)
-            # restart clears FIFOs and internal state so initial puts won't block
-            if hasattr(self.sm, "restart"):
-                self.sm.restart()
-        except Exception:
-            # Best effort: proceed; put fallback below handles issues
-            pass
+        self.sm.active(0)
         self.reps = reps
         ar[-1] = 0  # Ensure at least one STOP
         for x, d in enumerate(ar):  # Find 1st STOP
@@ -114,12 +106,7 @@ class RP2_RMT:
         self.icm = x  # index of 1st STOP
         mv = memoryview(ar)
         n = min(x, 4)  # Fill FIFO if there are enough data points.
-        # Initial FIFO fill. If a rare blocking condition occurs, fall back to single-word puts.
-        try:
-            self.sm.put(mv[0:n])
-        except Exception:
-            for i in range(n):
-                self.sm.put(mv[i:i+1])
+        self.sm.put(mv[0:n])
         self.arr = ar  # Initial conditions for ISR
         self.apt = n  # Point to next data value
         self.ict = 0  # IRQ count

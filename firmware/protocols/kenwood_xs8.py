@@ -134,32 +134,28 @@ def send_kenwood_xs8(ctx, device_name, dev, command, options=None):
     # Protocol requires inverted data byte
     inverted_byte = (~int(code)) & 0xFF
 
-    ctx["ir_busy"] = True
-    try:
-        for _ in range(reps):
-            # Start sequence
-            ctrl.value(1)
-            _busy_wait_us(pre_us)
-            sdat.value(1)
-            _busy_wait_us(start_high_us)
+    for _ in range(reps):
+        # Start sequence
+        ctrl.value(1)
+        _busy_wait_us(pre_us)
+        sdat.value(1)
+        _busy_wait_us(start_high_us)
 
-            for i in range(7, -1, -1):
-                bit = (inverted_byte >> i) & 0x1
-                sdat.value(0)
-                if bit == 1:
-                    _busy_wait_us(bit1_low_us)
-                else:
-                    _busy_wait_us(bit0_low_us)
-                sdat.value(1)
-                _busy_wait_us(frame_high_us)
-
-            ctrl.value(0)
-            _busy_wait_us(post_low_us)
+        for i in range(7, -1, -1):
+            bit = (inverted_byte >> i) & 0x1
             sdat.value(0)
-            # Small inter-command idle before repeating
-            _busy_wait_us(2000)
-    finally:
-        ctx["ir_busy"] = False
+            if bit == 1:
+                _busy_wait_us(bit1_low_us)
+            else:
+                _busy_wait_us(bit0_low_us)
+            sdat.value(1)
+            _busy_wait_us(frame_high_us)
+
+        ctrl.value(0)
+        _busy_wait_us(post_low_us)
+        sdat.value(0)
+        # Small inter-command idle before repeating
+        _busy_wait_us(2000)
 
     return 200, {
         "status": "success",

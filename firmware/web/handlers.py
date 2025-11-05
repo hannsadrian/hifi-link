@@ -75,8 +75,8 @@ def ui_config_put_handler(ctx, req):
 
     Accepts any valid JSON type (object, array, string, number, boolean, null).
     """
-    if not req.json or not isinstance(req.json, dict):
-        return 400, {"error": "Expected JSON object"}
+    if req.json is None:
+        return 400, {"error": "Expected JSON body with Content-Type: application/json"}
     write_json_atomic(_ui_config_filename(ctx), req.json)
     return 200, req.json
 
@@ -84,16 +84,11 @@ def ui_config_put_handler(ctx, req):
 # ----- Devices CRUD -----
 
 def _load_devices(ctx):
-    devices = ctx.get("devices_cache")
-    if devices is None:
-        devices = read_json(ctx.get("devices_filename"), {}) or {}
-        ctx["devices_cache"] = devices
-    return devices
+    return read_json(ctx.get("devices_filename"), {}) or {}
 
 
 def _save_devices(ctx, devices):
     write_json_atomic(ctx.get("devices_filename"), devices)
-    ctx["devices_cache"] = devices
 
 
 def devices_list_handler(ctx, req):
@@ -167,9 +162,6 @@ def device_send_handler(ctx, req):
     name = req.params.get("name") or req.params.get("device") or (req.json or {}).get("name")
     command = req.params.get("command") or (req.json or {}).get("command")
     reps_raw = req.params.get("repetitions") or (req.json or {}).get("repetitions")
-    count_raw = req.params.get("count") or (req.json or {}).get("count")
-    fast_raw = req.params.get("fast") or req.params.get("async") or (req.json or {}).get("fast") or (req.json or {}).get("async") if req.json else None
-    sync_raw = req.params.get("sync") or (req.json or {}).get("sync") if req.json else None
     if not name or not command:
         return 400, {"error": "Missing 'name' or 'command'"}
 
@@ -181,80 +173,18 @@ def device_send_handler(ctx, req):
         except Exception:
             return 400, {"error": "Invalid 'repetitions' value"}
 
-    # Parse count for repeated presses
-    count = 1
-    if count_raw is not None:
-        try:
-            count = max(1, int(count_raw))
-        except Exception:
-            return 400, {"error": "Invalid 'count' value"}
-
     # Allow comma-separated multiple commands in 'command' parameter
-    # Auto-enqueue during burst or active send if queue is available and non-empty or IR is busy
-    q = ctx.get("send_queue")
-    queue_max = int(ctx.get("send_queue_max") or 64)
-    ir_busy = bool(ctx.get("ir_busy"))
-
     if "," in str(command):
         commands = [c.strip() for c in str(command).split(",") if c.strip()]
         results = []
         overall_ok = True
-        # Default to enqueue when a queue is available unless explicitly forced sync
-        force_sync = sync_raw is not None and str(sync_raw) not in ("0", "false", "False")
-        if (q is not None and not force_sync) or (fast_raw is not None and str(fast_raw) not in ("0", "false", "False")) or (q is not None and (len(q) > 0 or ir_busy)):
-            # Enqueue all commands (respect count for each)
-            if q is None:
-                return 503, {"error": "Async queue not available"}
-            max_len = queue_max
-            to_enqueue = []
-            for cmd in commands:
-                n = count
-                for _ in range(n):
-                    to_enqueue.append((name, cmd, options))
-            space = max_len - len(q)
-            if space <= 0:
-                return 429, {"error": "Queue full", "queued": len(q), "max": max_len}
-            added = min(space, len(to_enqueue))
-            for i in range(added):
-                q.append(to_enqueue[i])
-            return 202, {"status": "queued", "device": name, "enqueued": added, "pending": len(q)}
-        else:
-            for cmd in commands:
-                status, payload = dispatch_send(ctx, name, cmd, options)
-                results.append({"command": cmd, "status": status, "payload": payload})
-                if status != 200:
-                    overall_ok = False
+        for cmd in commands:
+            status, payload = dispatch_send(ctx, name, cmd, options)
+            results.append({"command": cmd, "status": status, "payload": payload})
+            if status != 200:
+                overall_ok = False
         # Always return 200 with per-command statuses to avoid partial failures blocking response
         return 200, {"status": "multi", "device": name, "results": results}
-
-    # Batch repeated presses via 'count' while preserving toggle behavior across sends
-
-    # Default to enqueue when a queue is available unless explicitly forced sync
-    force_sync = sync_raw is not None and str(sync_raw) not in ("0", "false", "False")
-    if (q is not None and not force_sync) or (fast_raw is not None and str(fast_raw) not in ("0", "false", "False")) or (q is not None and (len(q) > 0 or ir_busy)):
-        # Enqueue single command count times
-        if q is None:
-            return 503, {"error": "Async queue not available"}
-        max_len = queue_max
-        space = max_len - len(q)
-        if space <= 0:
-            return 429, {"error": "Queue full", "queued": len(q), "max": max_len}
-        added = min(space, count)
-        for _ in range(added):
-            q.append((name, command, options))
-        return 202, {"status": "queued", "device": name, "command": command, "enqueued": added, "pending": len(q)}
-
-    if count > 1:
-        ok = 0
-        last_status = 200
-        last_payload = None
-        for _ in range(count):
-            status, payload = dispatch_send(ctx, name, command, options)
-            last_status, last_payload = status, payload
-            if status == 200:
-                ok += 1
-        # Compact response to minimize payload size
-        return 200, {"status": "multi", "device": name, "command": command, "count": count, "ok": ok, "last": {"status": last_status, "payload": last_payload}}
 
     # Single command behavior (preserve original return semantics)
     return dispatch_send(ctx, name, command, options)
@@ -297,3 +227,76 @@ def device_send_ws_handler(ctx, ws):
             ws.send(json.dumps({"status": "error", "message": "Invalid JSON"}))
         except Exception as e:
             ws.send(json.dumps({"status": "error", "message": str(e)}))
+
+
+# ----- Timers API -----
+
+def _get_timer_mgr(ctx):
+    return ctx.get("timers")
+
+
+def timers_get_handler(ctx, req):
+    mgr = _get_timer_mgr(ctx)
+    if not mgr:
+        return 501, {"error": "Timers not available"}
+    try:
+        return 200, mgr.list()
+    except Exception as e:
+        return 500, {"error": str(e)}
+
+
+def _validate_timer_payload(body):
+    if not isinstance(body, dict):
+        return False, "Expected JSON object"
+    required = ["type", "label", "actions", "delay_minutes"]
+    if not all(k in body for k in required):
+        return False, "Missing required fields: %s" % ", ".join(required)
+    if not isinstance(body.get("actions"), list) or not body.get("actions"):
+        return False, "'actions' must be a non-empty list"
+    return True, None
+
+
+def timers_post_handler(ctx, req):
+    mgr = _get_timer_mgr(ctx)
+    if not mgr:
+        return 501, {"error": "Timers not available"}
+    body = req.json
+    ok, err = _validate_timer_payload(body)
+    if not ok:
+        return 400, {"error": err}
+    try:
+        mgr.add(body)
+        return 202, {"message": "Timer creation request accepted"}
+    except Exception as e:
+        return 500, {"error": str(e)}
+
+
+def timers_test_handler(ctx, req):
+    mgr = _get_timer_mgr(ctx)
+    if not mgr:
+        return 501, {"error": "Timers not available"}
+    body = req.json
+    ok, err = _validate_timer_payload(body)
+    if not ok:
+        return 400, {"error": err}
+    try:
+        mgr.test(body)
+        return 200, {"message": "Timer test executed immediately"}
+    except Exception as e:
+        return 500, {"error": str(e)}
+
+
+def timer_delete_handler(ctx, req):
+    mgr = _get_timer_mgr(ctx)
+    if not mgr:
+        return 501, {"error": "Timers not available"}
+    tid = req.params.get("id") or req.params.get("timer_id")
+    if not tid:
+        return 400, {"error": "Missing 'id' query parameter"}
+    try:
+        ok = mgr.delete(tid)
+        if ok:
+            return 200, {"message": "Timer deleted", "id": tid}
+        return 404, {"error": "Unknown timer id"}
+    except Exception as e:
+        return 500, {"error": str(e)}

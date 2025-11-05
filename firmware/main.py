@@ -21,12 +21,12 @@ from web.handlers import (
     device_get_handler,
     device_put_handler,
     device_delete_handler,
+    timers_get_handler,
+    timers_post_handler,
+    timers_test_handler,
+    timer_delete_handler,
 )
-try:
-    import _thread
-except Exception:
-    _thread = None
-import time
+from timers import TimerManager
 
 
 def main():
@@ -57,37 +57,11 @@ def main():
         "ui_config_filename": cfg["storage"].get("ui_config_filename", "ui_config.json"),
         "toggle_bit": 0,
         "toggles": {},
-        # Async send queue (optional)
-        "send_queue": [],
-        "send_queue_max": 64,
     }
 
-    # Start background worker to process enqueued sends if threading is available
-    def _send_worker(ctx):
-        from protocols.dispatch import send_command as _send
-        while True:
-            try:
-                item = None
-                q = ctx.get("send_queue")
-                if q:
-                    try:
-                        item = q.pop(0)
-                    except Exception:
-                        item = None
-                if item is None:
-                    time.sleep(0.01)
-                    continue
-                name, command, options = item
-                _send(ctx, name, command, options)
-            except Exception:
-                # Don't crash worker on errors
-                time.sleep(0.05)
-
-    if _thread is not None:
-        try:
-            _thread.start_new_thread(_send_worker, (context,))
-        except Exception:
-            pass
+    # Timers
+    timers = TimerManager(context, filename=cfg["storage"].get("timers_filename", "timers.json"))
+    context["timers"] = timers
 
     router = {
         ("GET", "/health"): health_handler,
@@ -105,6 +79,11 @@ def main():
         ("GET", "/device"): device_get_handler,
         ("PUT", "/device"): device_put_handler,
         ("DELETE", "/device"): device_delete_handler,
+        # Timers API
+        ("GET", "/timers"): timers_get_handler,
+        ("POST", "/timers"): timers_post_handler,
+        ("POST", "/timers/test"): timers_test_handler,
+        ("DELETE", "/timer"): timer_delete_handler,  # delete by ?id=
     }
 
     serve(cfg["web"]["port"], router, getattr(secrets, "API_KEY", None), context)
